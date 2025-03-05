@@ -1,0 +1,268 @@
+{
+    "last_product_id": 14,
+    "stores": [
+        {
+            "name": "Migros",
+            "products": [
+                {
+                    "id": 1,
+                    "type": "Ekmek",
+                    "name": "Uno Tam Buğday Ekmek",
+                    "price_history": [
+                        {
+                            "date": "2024-01-01",
+                            "price": 8.5
+                        },
+                        {
+                            "date": "2024-02-01",
+                            "price": 10.0
+                        },
+                        {
+                            "date": "2025-02-23",
+                            "price": 10.0
+                        },
+                        {
+                            "date": "2025-02-23",
+                            "price": 20.0
+                        },
+                        {
+                            "date": "2025-02-23",
+                            "price": 80.0
+                        }
+                    ],
+                    "latest_price": 30.0
+                },
+                {
+                    "id": 2,
+                    "type": "Makarna",
+                    "name": "Barilla Makarna",
+                    "price_history": [
+                        {
+                            "date": "2023-12-15",
+                            "price": 18.0
+                        }
+                    ],
+                    "latest_price": 35.0
+                },
+                {
+                    "id": 4,
+                    "type": "Kablo",
+                    "name": "Uzun Bahce Kablosu",
+                    "price_history": [
+                        {
+                            "date": "2025-02-11",
+                            "price": 550.0
+                        },
+                        {
+                            "date": "2025-02-23",
+                            "price": 550.0
+                        },
+                        {
+                            "date": "2025-02-23",
+                            "price": 50.0
+                        },
+                        {
+                            "date": "2025-02-23",
+                            "price": 10.0
+                        },
+                        {
+                            "date": "2025-02-23",
+                            "price": 20.0
+                        }
+                    ],
+                    "latest_price": 80.0
+                },
+                {
+                    "id": 5,
+                    "type": "Ev",
+                    "name": "Ampul",
+                    "price_history": [
+                        {
+                            "date": "2025-02-24",
+                            "price": 32.0
+                        },
+                        {
+                            "date": "2025-02-24",
+                            "price": 32.0
+                        },
+                        {
+                            "date": "2025-02-24",
+                            "price": 3.0
+                        },
+                        {
+                            "date": "2025-02-24",
+                            "price": 6.92
+                        }
+                    ],
+                    "latest_price": 12.99
+                },
+                {
+                    "id": 6,
+                    "type": "Bilinmeyen",
+                    "name": "Pirasa",
+                    "price_history": [
+                        {
+                            "date": "2025-02-24",
+                            "price": 3.0
+                        },
+                        {
+                            "date": "2025-02-24",
+                            "price": 3.0
+                        },
+                        {
+                            "date": "2025-02-24",
+                            "price": 6.92
+                        }
+                    ],
+                    "latest_price": 12.99
+                },
+                {
+                    "id": 7,
+                    "type": "sebze",
+                    "name": "kara lahana",
+                    "price_history": [
+                        {
+                            "date": "2025-02-24",
+                            "price": 6.92
+                        },
+                        {
+                            "date": "2025-02-24",
+                            "price": 6.92
+                        },
+                        {
+                            "date": "2025-02-26",
+                            "time": "16:24:16",
+                            "price": 12.99
+                        }
+                    ],
+                    "latest_price": 2.99
+                },
+                {
+                    "id": 8,
+                    "type": "et",
+                    "name": "Tyson Chicken",
+                    "price_history": [
+                        {
+                            "date": "2025-02-24",
+                            "price": 12.99
+                        }
+                    ],
+                    "latest_price": 12.99
+                },
+                {
+                    "id": 9,
+                    "type": "is aleti",
+                    "name": "matkap",
+                    "price_history": [
+                        {
+                            "date": "2025-02-24",
+                            "price": 1200.0
+                        },
+                        {
+                            "date": "2025-02-26",
+                            "time": "16:24:32",
+                            "price": 1200.0
+                        }
+                    ],
+                    "latest_price": 200.0
+                }
+            ]
+        },
+        {
+            "name": "Walmart",
+            "products": [
+                {
+                    "id": 3,
+                    "type": "Süt",
+                    "name": "Sütaş Süt",
+                    "price_history": [
+                        {
+                            "date": "2023-12-01",
+                            "price": 25.0
+                        },
+                        {
+                            "date": "2024-02-10",
+                            "price": 30.0
+                        }
+                    ],
+                    "latest_price": 30.0
+                }
+            ]
+        },
+        {
+            "name": "Tamirci",
+            "products": [
+                {
+                    "id": 10,
+                    "type": "Bilinmeyen",
+                    "name": "Kar Lastigi",
+                    "price_history": [
+                        {
+                            "date": "2025-02-24",
+                            "price": 1000.0
+                        }
+                    ],
+                    "latest_price": 1000.0
+                }
+            ]
+        },
+        {
+            "name": "File Market",
+            "products": [
+                {
+                    "id": 11,
+                    "type": "Et",
+                    "name": "Tavuk",
+                    "price_history": [
+                        {
+                            "date": "2025-02-26",
+                            "price": 200.0
+                        },
+                        {
+                            "date": "2025-02-28",
+                            "time": "11:21:05",
+                            "price": 200.0
+                        }
+                    ],
+                    "latest_price": 500.0
+                },
+                {
+                    "id": 12,
+                    "type": "Gida",
+                    "name": "Etimek",
+                    "price_history": [
+                        {
+                            "date": "2025-02-26",
+                            "price": 30.0
+                        }
+                    ],
+                    "latest_price": 30.0
+                },
+                {
+                    "id": 13,
+                    "type": "Bilinmeyen",
+                    "name": "Cikolata",
+                    "price_history": [
+                        {
+                            "date": "2025-02-26",
+                            "price": 80.0
+                        }
+                    ],
+                    "latest_price": 80.0
+                },
+                {
+                    "id": 14,
+                    "type": "Bilinmeyen",
+                    "name": "Kalem",
+                    "price_history": [
+                        {
+                            "date": "2025-02-28",
+                            "price": 200.0
+                        }
+                    ],
+                    "latest_price": 200.0
+                }
+            ]
+        }
+    ]
+}
