@@ -3,17 +3,13 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QMessageBox, QHBoxLayout, QHeaderView, QInputDialog, QRadioButton, QButtonGroup, QStackedWidget
 )
 import json
+import os
 from datetime import date
 from PyQt6.QtWidgets import QComboBox, QTableWidgetItem
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor,QBrush
 
 from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP, getcontext
-
-# Set precision for monetary calculations
-getcontext().prec = 10  # Adjust as needed
-
 
 # JSON Dosyaları
 STORES_PRODUCTS_FILE = "data/stores_products.json"
