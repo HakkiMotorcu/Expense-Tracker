@@ -11,6 +11,13 @@ from PyQt6.QtGui import QColor,QBrush
 
 from datetime import datetime
 
+import google.generativeai as genai
+import json
+from PIL import Image
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
+import re
+
+
 # JSON Dosyaları
 STORES_PRODUCTS_FILE = "data/stores_products.json"
 USERS_FILE = "data/users.json"
@@ -24,6 +31,8 @@ class ExpenseEntryPage(QWidget):
         self.load_users() 
         self.previous_store_index = 0
         self.previous_payer_index = 0
+        # Configure API Key
+        genai.configure(api_key=os.environ["GOOGLE_FLASH_2_API_KEY"])
         
     def init_ui(self):
         """UI öğelerini oluşturur"""
@@ -84,9 +93,15 @@ class ExpenseEntryPage(QWidget):
         self.stacked_widget = QStackedWidget()
         self.layout.addWidget(self.stacked_widget)
 
+
         # ✅ Initialize Product View (Ürün Listesi)
         self.product_view = QWidget()
         self.product_view_layout = QVBoxLayout(self.product_view)
+
+        # 📸 Add Receipt Upload Button
+        self.upload_receipt_button = QPushButton("📸 Fişi Tara ve Otomatik Doldur")
+        self.upload_receipt_button.clicked.connect(self.upload_receipt)
+        self.product_view_layout.addWidget(self.upload_receipt_button)
 
         self.product_dropdown = QComboBox()
         self.add_new_product_button = QPushButton("➕ Yeni Ürün")
@@ -1024,8 +1039,152 @@ class ExpenseEntryPage(QWidget):
 
             # Kaydet butonunu kontrol et
             self.save_button.setEnabled(self.product_table.rowCount() != 0)
+    
+    def extract_expense_from_receipt(self, image_path):
+        """
+        Uses Google Gemini Flash 2.0 to extract structured expense data from an image.
+        Ensures output is valid JSON by providing an explicit example.
+        """
+        model = genai.GenerativeModel("gemini-2.0-flash")
 
+        # Resize image to prevent API errors due to large file sizes
+        image = self.resize_image(image_path)
 
+        # 🔍 Improved prompt with example JSON
+        prompt = """
+        Extract all structured data from this receipt and return it in strict JSON format.
+        The JSON should follow this structure:
+
+        ```json
+        {
+        "store_name": "Walmart",
+        "store_address": "571 WALTON BLVD, LAS CRUCES, NM 88001",
+        "phone_number": "575-525-1222",
+        "transaction_date": "2024-03-04",
+        "transaction_time": "10:33:09",
+        "transaction_number": "09425",
+        "items": [
+            {
+            "name": "BREAD",
+            "category": "Grocery",
+            "price": 3.13,
+            "quantity": 1
+            },
+            {
+            "name": "MILK",
+            "category": "Dairy",
+            "price": 2.50,
+            "quantity": 2
+            }
+        ],
+        "subtotal": 127.60,
+        "tax": 5.60,
+        "total": 133.20,
+        "payment_method": "DEBIT"
+        }
+        ```
+        
+        Ensure that:
+        - Prices are in decimal format.
+        - Categories are included if available.
+        - If some data is missing, return `null` instead of omitting the field.
+        - Do **not** wrap the JSON in Markdown (` ```json `).
+        """
+
+        try:
+            response = model.generate_content([image, prompt])
+
+            if not response or not response.candidates:
+                return {"error": "No valid response from Gemini API"}
+
+            raw_text = response.candidates[0].content.parts[0].text.strip()
+
+            # ✅ Ensure valid JSON by removing any extraneous Markdown formatting
+            clean_json_text = re.sub(r"```json\s*|\s*```", "", raw_text)
+
+            # ✅ Convert JSON text to Python object
+            extracted_data = json.loads(clean_json_text)
+
+            return extracted_data
+
+        except json.JSONDecodeError:
+            print("❌ Error: Failed to parse JSON from API response")
+            print("🔍 Raw Response Text:", raw_text)
+            return {"error": "Invalid JSON format in API response"}
+
+        except Exception as e:
+            print(f"❌ Unexpected Error: {e}")
+            return {"error": str(e)}
+
+    def upload_receipt(self):
+        """
+        Allows user to select a receipt image and processes it using Gemini Flash 2.0.
+        """
+        file_path, _ = QFileDialog.getOpenFileName(self, "Fiş Görselini Seç", "", "Images (*.png *.jpg *.jpeg)")
+        
+        if not file_path:
+            return  # If no file is selected, return
+
+        receipt_data = self.extract_expense_from_receipt(file_path)
+
+        if "error" in receipt_data:
+            QMessageBox.warning(self, "Hata", receipt_data["error"])
+            return
+
+        self.fill_expense_form(receipt_data)
+
+    def fill_expense_form(self, receipt_data):
+        """
+        Fills the expense form with extracted receipt data, ensuring correct sharing and total price calculations.
+        """
+        # ✅ Ensure 'store_name' exists
+        store_name = receipt_data.get("store_name", "Unknown")
+        self.store_dropdown.setCurrentText(store_name)
+
+        # ✅ Ensure 'items' exist
+        items = receipt_data.get("items", [])
+
+        self.product_table.setRowCount(0)  # Clear existing rows
+        total_expense = 0.0  # Toplam harcama tutarı
+
+        for item in items:
+            row_position = self.product_table.rowCount()
+            self.product_table.insertRow(row_position)
+
+            # ✅ Kullanılabilir anahtarları kontrol et
+            name = item.get("name", item.get("item", "Unknown Item"))  # "name" veya "item"
+            price = float(item.get("price", 0.0))  # Fiyatı float olarak al
+            quantity = int(item.get("quantity", 1))  # Miktar, yoksa varsayılan olarak 1
+
+            # ✅ Toplam fiyatı hesapla
+            total_price = price * quantity
+            total_expense += total_price  # Genel toplamı güncelle
+
+            # ✅ Ürün bilgilerini tabloya ekle
+            name_item = QTableWidgetItem(name)
+            price_item = QTableWidgetItem(f"{price:.2f}")
+            quantity_item = QTableWidgetItem(str(quantity))
+            total_price_item = QTableWidgetItem(f"{total_price:.2f}")
+
+            self.product_table.setItem(row_position, 0, name_item)
+            self.product_table.setItem(row_position, 1, price_item)
+            self.product_table.setItem(row_position, 2, quantity_item)
+            self.product_table.setItem(row_position, 3, total_price_item)
+
+            # ✅ Paylaşım için ComboBox ekle (Varsayılan: "Ortak")
+            shared_with_combo = QComboBox()
+            shared_with_combo.addItem("Ortak")  # Varsayılan olarak herkes
+            users = [self.payer_dropdown.itemText(i) for i in range(1, self.payer_dropdown.count())]
+            shared_with_combo.addItems(users)  # Kullanıcıları ekle
+            self.product_table.setCellWidget(row_position, 4, shared_with_combo)
+
+        # ✅ Genel toplam fiyatı güncelle
+        self.product_total_input.setText(f"{total_expense:.2f}")
+
+    def resize_image(self,image_path, max_size=(1024, 1024)):
+        image = Image.open(image_path)
+        image.thumbnail(max_size)
+        return image
 
 from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QVBoxLayout, QPushButton, QMessageBox, QDialogButtonBox
 from datetime import date

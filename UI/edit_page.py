@@ -644,3 +644,4 @@ class ExpenseDetailPage(QWidget):
             self.close()
         except Exception as e:
             QMessageBox.warning(self, "❗ Hata", f"Dosya kaydedilirken hata:\n{e}")
+
