@@ -1,8 +1,7 @@
 {
     "users": [
       {"id": 1, "name": "Canberk"},
-      {"id": 2, "name": "Hakkı"},
-      {"id": 3, "name": "İrem"}
+      {"id": 2, "name": "Hakkı"}
     ]
   }
   

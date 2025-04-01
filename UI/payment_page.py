@@ -6,11 +6,13 @@ from PyQt6.QtCore import Qt, QDate , QTime
 from datetime import datetime
 import json
 import os
+import shutil
 
 # 📁 Dosya Yolları
 USERS_FILE = "data/users.json"
 EXPENSES_FILE = "data/expenses.json"
 PAYMENTS_FILE = "data/payments.json"
+PAYMENT_RECIEPTS_DIR = "/Users/hakkimotorcu/Desktop/Harcama Listesi/payment_reciepts"
 
 class PaymentPage(QWidget):
     def __init__(self, parent=None):
@@ -238,7 +240,11 @@ class PaymentPage(QWidget):
             if not os.path.exists(PAYMENTS_FILE):
                 with open(PAYMENTS_FILE, "w", encoding="utf-8") as file:
                     json.dump({"payments": []}, file, indent=4, ensure_ascii=False)
-
+            if receipt:
+                new_reciept_path = 'Yok' if receipt is None else f'Fatura_{debtor}_{creditor}_{payment_date}_{payment_time}{os.path.splitext(receipt)[1]}'
+                os.rename(receipt, os.path.join(PAYMENT_RECIEPTS_DIR, new_reciept_path))
+            else:
+                new_reciept_path = 'Yok'
             with open(PAYMENTS_FILE, "r+", encoding="utf-8") as file:
                 data = json.load(file)
                 new_payment = {
@@ -248,13 +254,13 @@ class PaymentPage(QWidget):
                         "to": creditor,
                         "amount": total_amount,
                         "note": note,
-                        "receipt": receipt if receipt else "Yok"
+                        "receipt": new_reciept_path
                 }
                 data["payments"].append(new_payment)
 
                 file.seek(0)
                 json.dump(data, file, indent=4, ensure_ascii=False)
-
+                shutil.copy2(receipt, dest_path)
             QMessageBox.information(self, "Başarılı", "Ödemeler başarıyla kaydedildi!")
             self.reset_payment_page()
 

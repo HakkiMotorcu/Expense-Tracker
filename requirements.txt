@@ -1,0 +1,4 @@
+Pillow==11.1.0
+protobuf==6.30.2
+PyQt6==6.8.1
+PyQt6_sip==13.10.0

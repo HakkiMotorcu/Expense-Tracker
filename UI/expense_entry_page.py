@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem
 import re
 
 
+
 # JSON Dosyaları
 STORES_PRODUCTS_FILE = "data/stores_products.json"
 USERS_FILE = "data/users.json"
