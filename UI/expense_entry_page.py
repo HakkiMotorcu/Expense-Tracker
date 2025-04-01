@@ -27,93 +27,14 @@ EXPENSES_FILE = "data/expenses.json"
 class ExpenseEntryPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Add file cache to reduce reopening files
-        self.file_cache = {
-            "stores_products": None,
-            "users": None,
-            "expenses": None,
-            "last_read_time": {
-                "stores_products": 0,
-                "users": 0,
-                "expenses": 0
-            }
-        }
         self.init_ui()
         self.disable_widgets(self.layout)
         self.load_users() 
         self.previous_store_index = 0
         self.previous_payer_index = 0
         # Configure API Key
-        try:
-            genai.configure(api_key=os.environ["GOOGLE_FLASH_2_API_KEY"])
-        except KeyError:
-            print("Warning: GOOGLE_FLASH_2_API_KEY not found in environment variables")
+        genai.configure(api_key=os.environ["GOOGLE_FLASH_2_API_KEY"])
         
-    # Read JSON files with caching to avoid reopening the same file repeatedly
-    def read_json_file(self, file_path, cache_key, max_age_seconds=2):
-        """Read JSON file with caching to reduce file operations"""
-        current_time = datetime.now().timestamp()
-        
-        # Check if we have a recent cached version
-        if (self.file_cache[cache_key] is not None and 
-            current_time - self.file_cache["last_read_time"][cache_key] < max_age_seconds):
-            return self.file_cache[cache_key]
-            
-        try:
-            # Ensure the directory exists
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            
-            # If file doesn't exist, create it with default structure
-            if not os.path.exists(file_path):
-                default_data = {
-                    "stores_products": {"stores": [], "last_product_id": 0},
-                    "users": {"users": []},
-                    "expenses": {"expenses": []}
-                }
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(default_data.get(cache_key, {}), f, indent=4, ensure_ascii=False)
-                    
-            # Read the file
-            with open(file_path, "r", encoding="utf-8") as file:
-                data = json.load(file)
-                self.file_cache[cache_key] = data
-                self.file_cache["last_read_time"][cache_key] = current_time
-                return data
-                
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"Error reading {file_path}: {e}")
-            # Return empty default structure on error
-            default_data = {
-                "stores_products": {"stores": [], "last_product_id": 0},
-                "users": {"users": []},
-                "expenses": {"expenses": []}
-            }
-            return default_data.get(cache_key, {})
-    
-    # Write JSON file with atomic operation to prevent corruption
-    def write_json_file(self, file_path, data, cache_key):
-        """Write JSON file with atomic operation to prevent file corruption"""
-        try:
-            # Ensure the directory exists
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            
-            # Write to a temporary file first
-            temp_file = f"{file_path}.tmp"
-            with open(temp_file, "w", encoding="utf-8") as file:
-                json.dump(data, file, indent=4, ensure_ascii=False)
-                
-            # Replace the original file with the temporary file (atomic operation)
-            os.replace(temp_file, file_path)
-            
-            # Update cache
-            self.file_cache[cache_key] = data
-            self.file_cache["last_read_time"][cache_key] = datetime.now().timestamp()
-            return True
-            
-        except Exception as e:
-            print(f"Error writing {file_path}: {e}")
-            return False
-
     def init_ui(self):
         """UI öğelerini oluşturur"""
         self.layout = QVBoxLayout()
@@ -319,23 +240,23 @@ class ExpenseEntryPage(QWidget):
                     widget.setEnabled(True)
 
     def load_users(self):
-        """Load users with improved file handling"""
-        users_data = self.read_json_file(USERS_FILE, "users")
-        
-        self.payer_dropdown.clear()
-        self.payer_dropdown.addItem("👤 Kullanıcı Seçiniz")  # Varsayılan boş değer
-        
-        users = users_data.get("users", [])
-        if users:
-            self.payer_dropdown.addItems([user["name"] for user in users])
-        else:
-            print("No users found in the file")
-            
-        # Kullanıcı seçilmeden işlemleri engelle
-        self.payer_dropdown.setCurrentIndex(0)
-        self.payer_dropdown.setEnabled(True)
-        # Kullanıcı seçildiğinde mağazaları yükle
-        self.payer_dropdown.currentIndexChanged.connect(self.on_payer_selected)
+        try:
+            with open(USERS_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
+                
+                self.payer_dropdown.clear()
+                self.payer_dropdown.addItem("👤 Kullanıcı Seçiniz")  # Varsayılan boş değer
+                self.payer_dropdown.addItems([user["name"] for user in data["users"]])
+
+                # Kullanıcı seçilmeden işlemleri engelle
+                self.payer_dropdown.setCurrentIndex(0)
+                self.payer_dropdown.setEnabled(True)
+                # Kullanıcı seçildiğinde mağazaları yükle
+                self.payer_dropdown.currentIndexChanged.connect(self.on_payer_selected)
+
+        except FileNotFoundError:
+            self.payer_dropdown.clear()
+            self.payer_dropdown.addItem("👤 Kullanıcı Bulunamadı")
 
     def track_previous_index(self, index):
         """Track the previous index of the store dropdown."""
@@ -500,41 +421,42 @@ class ExpenseEntryPage(QWidget):
         self.product_total_input.setText("0.00")
 
     def load_stores_products(self,index=0):
-        """Load stores with improved file handling"""
-        stores_data = self.read_json_file(STORES_PRODUCTS_FILE, "stores_products")
-        
-        self.store_dropdown.clear()
-        self.store_dropdown.addItem("🏪 Mağaza Seçiniz")  # Varsayılan boş değer
-        
-        stores = stores_data.get("stores", [])
-        if stores:
-            self.store_dropdown.addItems([store["name"] for store in stores])
-        
-        # Mağaza seçilmeden işlemleri engelle
-        self.store_dropdown.setCurrentIndex(index)
-        self.store_dropdown.setEnabled(True)
-        self.add_store_button.setEnabled(True)
-        # Mağaza seçildiğinde ürünleri yükle
-        self.store_dropdown.currentIndexChanged.connect(self.on_store_selected)
+        try:
+            with open(STORES_PRODUCTS_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
+                self.store_dropdown.clear()
+                self.store_dropdown.addItem("🏪 Mağaza Seçiniz")  # Varsayılan boş değer
+                self.store_dropdown.addItems([store["name"] for store in data["stores"]])
+                # Mağaza seçilmeden işlemleri engelle
+                self.store_dropdown.setCurrentIndex(index)
+                self.store_dropdown.setEnabled(True)
+                self.add_store_button.setEnabled(True)
+                # Mağaza seçildiğinde ürünleri yükle
+                self.store_dropdown.currentIndexChanged.connect(self.on_store_selected)
+
+        except FileNotFoundError:
+            self.store_dropdown.clear()
+            self.store_dropdown.addItem("🏪 Mağaza Bulunamadı")
 
     def load_products(self):
-        """Load products with improved file handling"""
+        """Seçili mağazaya göre ürünleri yükler"""
         selected_store = self.store_dropdown.currentText()
         self.product_dropdown.clear()
 
-        if not selected_store or selected_store == "🏪 Mağaza Seçiniz":
-            return
+        if not selected_store:
+            return  # Eğer mağaza seçilmezse işlem yapma
 
-        stores_data = self.read_json_file(STORES_PRODUCTS_FILE, "stores_products")
-        self.product_dropdown.addItem("🛍️ Ürün Seçiniz")  # Varsayılan boş değer
-        
-        stores = stores_data.get("stores", [])
-        store = next((s for s in stores if s["name"] == selected_store), None)
-        
-        if store and "products" in store:
-            self.product_dropdown.addItems([p["name"] for p in store["products"]])
-        else:
-            print(f"No products found for store: {selected_store}")
+        try:
+            with open(STORES_PRODUCTS_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            self.product_dropdown.addItem("🛍️ Ürün Seçiniz")  # Varsayılan boş değer
+            store = next((s for s in data["stores"] if s["name"] == selected_store), None)
+            if store and "products" in store:
+                self.product_dropdown.addItems([p["name"] for p in store["products"]])
+
+
+        except (FileNotFoundError, json.JSONDecodeError):
+            QMessageBox.warning(self, "Hata", "Ürünler yüklenemedi!")
 
     def add_new_user(self):
         """Yeni kullanıcı ekler"""
@@ -548,7 +470,8 @@ class ExpenseEntryPage(QWidget):
             self.load_users()
 
     def add_new_store(self):
-        """Add new store with improved file handling"""
+        """Yeni bir mağaza ekler ve var olan mağazaları kontrol eder."""
+        
         # Get store name from user input
         store_name, ok = QInputDialog.getText(self, "Yeni Mağaza", "Mağaza Adı:")
 
@@ -559,170 +482,137 @@ class ExpenseEntryPage(QWidget):
 
         store_name = store_name.strip()
 
-        # Read current data
-        stores_data = self.read_json_file(STORES_PRODUCTS_FILE, "stores_products")
-        
-        # Check if store already exists
-        existing_store = next((s for s in stores_data.get("stores", []) 
-                              if s["name"].lower() == store_name.lower()), None)
+        try:
+            # Open the JSON file
+            with open(STORES_PRODUCTS_FILE, "r+", encoding="utf-8") as file:
+                data = json.load(file)
 
-        if existing_store:
-            QMessageBox.warning(self, "Hata", "Bu mağaza zaten mevcut!")
-            return
+                # Check if store already exists
+                existing_store = next((s for s in data["stores"] if s["name"].lower() == store_name.lower()), None)
 
-        # Add new store
-        new_store = {
-            "name": store_name,
-            "products": []
-        }
+                if existing_store:
+                    QMessageBox.warning(self, "Hata", "Bu mağaza zaten mevcut!")
+                    return
 
-        stores_data.setdefault("stores", []).append(new_store)
+                # Add new store
+                new_store = {
+                    "name": store_name,
+                    "products": []
+                }
 
-        # Write back to JSON with atomic operation
-        if self.write_json_file(STORES_PRODUCTS_FILE, stores_data, "stores_products"):
+                data["stores"].append(new_store)
+
+                # Write back to JSON
+                file.seek(0)
+                json.dump(data, file, indent=4, ensure_ascii=False)
+                file.truncate()
+
             # Update store dropdown in the UI
             self.store_dropdown.addItem(store_name)
+
             QMessageBox.information(self, "Başarılı", f"{store_name} mağazası başarıyla eklendi!")
-        else:
-            QMessageBox.warning(self, "Hata", "Mağaza eklenemedi! Dosya yazma hatası.")
+
+        except (FileNotFoundError, json.JSONDecodeError):
+            QMessageBox.warning(self, "Hata", "Mağaza eklenemedi! JSON dosyası okunamadı.")
 
     def fill_price_field(self):
-        """Fill price field with improved file handling"""
+        """Seçilen ürünün fiyatını getirir (fiyat değişimini hemen kaydetmez)"""
         selected_store = self.store_dropdown.currentText()
         selected_product = self.product_dropdown.currentText()
-        
-        if not selected_store or not selected_product or selected_product == "🛍️ Ürün Seçiniz":
-            return
-            
         if self.count_input.text() == "":
             self.count_input.setText("1")
-            
-        stores_data = self.read_json_file(STORES_PRODUCTS_FILE, "stores_products")
-        
-        stores = stores_data.get("stores", [])
-        store = next((s for s in stores if s["name"] == selected_store), None)
-        
-        if store:
-            product = next((p for p in store["products"] if p["name"] == selected_product), None)
-            if product:
-                current_price = str(product["latest_price"])
-                self.price_input.setText(current_price)
+        try:
+            with open(STORES_PRODUCTS_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
+
+            store = next((s for s in data["stores"] if s["name"] == selected_store), None)
+            if store:
+                product = next((p for p in store["products"] if p["name"] == selected_product), None)
+                if product:
+                    current_price = str(product["latest_price"])
+                    self.price_input.setText(current_price)
+                else:
+                    self.price_input.clear()
             else:
                 self.price_input.clear()
-        else:
-            self.price_input.clear()
+
+        except (FileNotFoundError, json.JSONDecodeError):
+            QMessageBox.warning(self, "Hata", "Ürün bilgileri yüklenemedi!")
 
     def update_product_price(self, store_name, product_name, new_price):
-        """Update product price with improved file handling"""
-        if not store_name or not product_name:
-            return False
-            
+        """Eğer fiyat değiştiyse, stores_products.json içinde günceller (tarih + saat ayrı kaydedilir)"""
         try:
-            # Convert to float for comparison
-            new_price = float(new_price)
-        except ValueError:
-            print(f"Invalid price format: {new_price}")
-            return False
-            
-        stores_data = self.read_json_file(STORES_PRODUCTS_FILE, "stores_products")
-        
-        stores = stores_data.get("stores", [])
-        store = next((s for s in stores if s["name"] == store_name), None)
-        
-        if not store:
-            print(f"Store not found: {store_name}")
-            return False
-            
-        product = next((p for p in store["products"] if p["name"] == product_name), None)
-        
-        if not product:
-            print(f"Product not found: {product_name}")
-            return False
-            
-        # Only update if price has changed
-        if abs(product.get("latest_price", 0) - new_price) > 0.01:
-            # Prepare readable date and time
-            now = datetime.now()
-            current_date = now.strftime("%Y-%m-%d")
-            current_time = now.strftime("%H:%M:%S")
+            with open(STORES_PRODUCTS_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
 
-            # Add old price to price_history if not already present
-            if "price_history" not in product:
-                product["price_history"] = []
+            store = next((s for s in data["stores"] if s["name"] == store_name), None)
+            if store:
+                product = next((p for p in store["products"] if p["name"] == product_name), None)
+                if product:
+                    # ✅ Only update if price has changed
+                    if product["latest_price"] != new_price:
+                        # Prepare readable date and time
+                        now = datetime.now()
+                        current_date = now.strftime("%Y-%m-%d")
+                        current_time = now.strftime("%H:%M:%S")
 
-            product["price_history"].append({
-                "date": current_date,
-                "time": current_time,
-                "price": product["latest_price"]
-            })
+                        # Add old price to price_history if not already present
+                        if "price_history" not in product:
+                            product["price_history"] = []
 
-            # Update the latest price
-            product["latest_price"] = new_price
+                        product["price_history"].append({
+                            "date": current_date,
+                            "time": current_time,
+                            "price": product["latest_price"]
+                        })
 
-            # Save updated JSON
-            if self.write_json_file(STORES_PRODUCTS_FILE, stores_data, "stores_products"):
-                print(f"Fiyat güncellendi: {product_name} - Yeni Fiyat: {new_price}")
-                return True
-            else:
-                print("Fiyat güncellenemedi: Dosya yazma hatası")
-                return False
-        else:
-            print("Fiyat aynı, güncelleme yapılmadı.")
-            return True
+                        # Update the latest price
+                        product["latest_price"] = new_price
+
+                        # Save updated JSON
+                        with open(STORES_PRODUCTS_FILE, "w", encoding="utf-8") as file:
+                            json.dump(data, file, indent=4, ensure_ascii=False)
+
+                        print(f"Fiyat güncellendi: {product_name} - Yeni Fiyat: {new_price}")
+                    else:
+                        print("Fiyat aynı, güncelleme yapılmadı.")
+
+        except (FileNotFoundError, json.JSONDecodeError):
+            QMessageBox.warning(self, "Hata", "Fiyat güncellenemedi!")
 
     def add_product_to_table(self):
-        """Improved method to add product to table"""
+        """Seçilen ürünü tabloya ekler ve fiyat değişimini kaydeder"""
         product_name = self.product_dropdown.currentText()
-        product_price = self.price_input.text().strip()
-        product_count = self.count_input.text().strip()
+        product_price = self.price_input.text()
+        product_count = self.count_input.text()
         selected_store = self.store_dropdown.currentText()
 
-        # Validation
-        if not product_name or product_name == "🛍️ Ürün Seçiniz":
-            QMessageBox.warning(self, "Hata", "Lütfen ürün seçin!")
-            return
-            
-        if not product_price:
-            QMessageBox.warning(self, "Hata", "Lütfen fiyat girin!")
+        if not product_name or not product_price:
+            QMessageBox.warning(self, "Hata", "Lütfen ürün seçin ve fiyat girin!")
             return
 
-        # Parse price with better error handling
         try:
             product_price = float(product_price)
-            if product_price < 0:
-                QMessageBox.warning(self, "Hata", "Negatif fiyat girilemez!")
-                return
         except ValueError:
             QMessageBox.warning(self, "Hata", "Geçerli bir fiyat girin!")
             return
 
-        # Parse count with better error handling
         try:
-            product_count = int(product_count) if product_count else 1
-            if product_count < 1:
-                QMessageBox.warning(self, "Hata", "Ürün adedi en az 1 olmalıdır!")
-                return
+            product_count = int(product_count)
         except ValueError:
             QMessageBox.warning(self, "Hata", "Geçerli bir adet girin!")
             return
 
-        # Calculate total price
-        total_price = product_price * product_count
-
         # Add new row to table
         row_position = self.product_table.rowCount()
         self.product_table.insertRow(row_position)
-        
-        # Create table items with better formatting
         self.product_table.setItem(row_position, 0, QTableWidgetItem(product_name))
         self.product_table.setItem(row_position, 1, QTableWidgetItem(f"{product_price:.2f}"))
         self.product_table.setItem(row_position, 2, QTableWidgetItem(f"{product_count}"))
-        self.product_table.setItem(row_position, 3, QTableWidgetItem(f"{total_price:.2f}"))
+        self.product_table.setItem(row_position, 3, QTableWidgetItem(f"{product_count * product_price:.2f}"))
 
         # Update total price field
-        current_total = float(self.product_total_input.text() or "0")
-        new_total = current_total + total_price
-        self.product_total_input.setText(f"{new_total:.2f}")
+        self.product_total_input.setText(f"{float(self.product_total_input.text()) + product_price * product_count:.2f}")
 
         # Add sharing combobox
         shared_with_combo = QComboBox()
@@ -731,144 +621,281 @@ class ExpenseEntryPage(QWidget):
         shared_with_combo.addItems(users)
         self.product_table.setCellWidget(row_position, 4, shared_with_combo)
 
-        # Update product price in database
+        # ✅ Update product price only after adding to table
         self.update_product_price(selected_store, product_name, product_price)
 
         # Enable save button if table has rows
-        self.save_button.setEnabled(self.product_table.rowCount() > 0)
+        self.save_button.setEnabled(self.product_table.rowCount() != 0)
 
     def save_expense(self):
-        """Save expense with improved file handling"""
+        """Harcamayı JSON'a kaydeder ve expenses.json dosyasını günceller."""
         paid_by = self.payer_dropdown.currentText()
         location = self.store_dropdown.currentText()
-        
-        # Validate basic inputs
-        if paid_by == "👤 Kullanıcı Seçiniz":
-            QMessageBox.warning(self, "Hata", "Lütfen ödemeyi yapan kişiyi seçin!")
+        current_date = datetime.today().strftime("%Y-%m-%d")  # 📅 Tarihi al
+        current_time = datetime.now().strftime("%H:%M")  # ⏰ Saati al
+        total_amount = 0  # 💰 Toplam harcama miktarı
+
+        sub_items = []
+        for row in range(self.subitems_table.rowCount()):
+            name = self.subitems_table.item(row, 0).text()
+            price = float(self.subitems_table.item(row, 1).text().replace("₺", ""))
+            total_amount += price  # Toplam miktarı hesapla
+
+            # Paylaşım bilgilerini al (QComboBox)
+            shared_with_combo = self.subitems_table.cellWidget(row, 2)
+            shared_with = shared_with_combo.currentText()
+
+            # Eğer "Ortak" seçilmişse, tüm kullanıcıları paylaşım listesine ekle
+            if shared_with == "Ortak":
+                shared_with = [self.payer_dropdown.itemText(i) for i in range(self.payer_dropdown.count())]
+            else:
+                shared_with = [shared_with]
+
+            sub_items.append({"name": name, "price": price, "shared_by": shared_with})
+
+        # 📂 JSON dosyasını güncelle
+        try:
+            if os.path.exists(EXPENSES_FILE):
+                with open(EXPENSES_FILE, "r+", encoding="utf-8") as file:
+                    data = json.load(file)
+            else:
+                data = {"expenses": []}  # Eğer dosya yoksa boş bir JSON oluştur
+
+            # Yeni harcamayı ekle
+            new_expense = {
+                "id": len(data["expenses"]) + 1,
+                "date": current_date,  # 📅 Tarihi ekle
+                "time": current_time,  # ⏰ Saati ekle
+                "location": location,
+                "paid_by": paid_by,
+                "total_amount": total_amount,  # 💰 Toplam harcamayı ekle
+                "sub_items": sub_items
+            }
+
+            data["expenses"].append(new_expense)
+
+            # Güncellenmiş verileri dosyaya yaz
+            with open(EXPENSES_FILE, "w", encoding="utf-8") as file:
+                json.dump(data, file, indent=4, ensure_ascii=False)
+
+            QMessageBox.information(self, "Başarılı", "Harcama başarıyla kaydedildi!")
+
+        except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
+            QMessageBox.warning(self, "Hata", f"Harcamalar kaydedilemedi!\n{e}")
+
+    def add_new_product(self):
+        """Yeni ürün ekler ve fiyatını belirler."""
+        selected_store = self.store_dropdown.currentText()
+
+        if not selected_store:
+            QMessageBox.warning(self, "Hata", "Önce bir mağaza seçmelisiniz!")
             return
-            
-        if location == "🏪 Mağaza Seçiniz":
-            QMessageBox.warning(self, "Hata", "Lütfen mağaza seçin!")
+
+        # Open the custom dialog
+        dialog = ProductInputDialog()
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-            
-        # Get current date and time
-        current_date = datetime.today().strftime("%Y-%m-%d")
-        current_time = datetime.now().strftime("%H:%M")
+
+        new_product_name, price_text = dialog.get_inputs()
+
+        # Validate Product Name
+        if not new_product_name.strip():
+            QMessageBox.warning(self, "Hata", "Ürün adı boş olamaz!")
+            return
+
+        # Parse type:name if provided
+        if ':' in new_product_name:
+            product_type, product_name = map(str.strip, new_product_name.split(':', 1))
+        else:
+            product_type = "Bilinmeyen"
+            product_name = new_product_name.strip()
+
+        # Validate Price
+        try:
+            price = float(price_text)
+        except ValueError:
+            QMessageBox.warning(self, "Hata", "Geçerli bir fiyat girin!")
+            return
+
+        try:
+            with open(STORES_PRODUCTS_FILE, "r+", encoding="utf-8") as file:
+                data = json.load(file)
+
+                # Find the selected store
+                store = next((s for s in data["stores"] if s["name"] == selected_store), None)
+                if not store:
+                    QMessageBox.warning(self, "Hata", "Seçilen mağaza bulunamadı!")
+                    return
+
+                # Check if the product already exists
+                existing_product = next((p for p in store["products"] if p["name"] == product_name), None)
+                if existing_product:
+                    QMessageBox.warning(self, "Hata", "Bu ürün zaten mevcut!")
+                    return
+
+                # Add new product
+                new_product_id = data["last_product_id"] + 1
+                data["last_product_id"] = new_product_id
+
+                new_product = {
+                    "id": new_product_id,
+                    "type": product_type,
+                    "name": product_name,
+                    "price_history": [{"date": date.today().isoformat(), "price": price}],
+                    "latest_price": price
+                }
+                store["products"].append(new_product)
+
+                # Update JSON file
+                file.seek(0)
+                json.dump(data, file, indent=4, ensure_ascii=False)
+                file.truncate()
+
+            # Update the UI dropdown
+            self.product_dropdown.addItem(product_name)
+            QMessageBox.information(self, "Başarılı", f"{product_name} mağaza: {selected_store} içinde eklendi!")
+
+        except (FileNotFoundError, json.JSONDecodeError):
+            QMessageBox.warning(self, "Hata", "Dosya okunamadı veya JSON formatı hatalı!")
+
+        """Seçilen ürünü tabloya ekler ve fiyat değişimini kontrol eder"""
+        product_name = self.product_dropdown.currentText()
+        product_price = self.price_input.text()
+        product_count = self.count_input.text()
+        selected_store = self.store_dropdown.currentText()
+
+        if not product_name or not product_price:
+            QMessageBox.warning(self, "Hata", "Lütfen ürün seçin ve fiyat girin!")
+            return
+
+        try:
+            product_price = float(product_price)
+        except ValueError:
+            QMessageBox.warning(self, "Hata", "Geçerli bir fiyat girin!")
+            return
+        try:
+            product_count = int(product_count)
+        except ValueError:
+            QMessageBox.warning(self, "Hata", "Geçerli bir adet girin!")
+            return
+
+        # Yeni satır ekle
+        row_position = self.product_table.rowCount()
         
-        # Process Sub-items view
+        self.product_table.insertRow(row_position)
+        self.product_table.setItem(row_position, 0, QTableWidgetItem(product_name))
+        self.product_table.setItem(row_position, 1, QTableWidgetItem(f"{product_price}"))
+        self.product_table.setItem(row_position, 2, QTableWidgetItem(f"{product_count}"))
+        self.product_table.setItem(row_position, 3, QTableWidgetItem(f"{product_count*product_price}"))
+
+        self.product_total_input.setText(str(float(self.product_total_input.text()) + product_price*product_count))
+
+        # Paylaşım için ComboBox ekleyelim
+        shared_with_combo = QComboBox()
+        shared_with_combo.addItem("Ortak")  # Ortak seçeneği
+        users = [self.payer_dropdown.itemText(i) for i in range(1,self.payer_dropdown.count())]
+        shared_with_combo.addItems(users)  # Kullanıcıları ekle
+        self.product_table.setCellWidget(row_position, 4, shared_with_combo)
+
+        # **Fiyat değişmişse güncelle**
+        self.update_product_price(selected_store, product_name, product_price)
+        if self.product_table.rowCount() != 0:
+            self.save_button.setEnabled(True)
+        else:
+            self.save_button.setEnabled(False)
+        # QMessageBox.information(self, "Başarılı", f"{product_name} tabloya eklendi!")
+    
+    def save_expense(self):
+        """Harcamayı JSON'a kaydeder"""
+        paid_by = self.payer_dropdown.currentText()
+        location = self.store_dropdown.currentText()
+        sub_items = []
+        manual_split = {}
         if self.stacked_widget.currentIndex() == 0:
             if self.product_table.rowCount() == 0:
                 QMessageBox.warning(self, "Hata", "Lütfen en az bir ürün ekleyin!")
                 return
-                
-            sub_items = []
-            total_amount = 0
-                
-            # Process each product row
             for row in range(self.product_table.rowCount()):
-                try:
-                    name = self.product_table.item(row, 0).text()
-                    price = float(self.product_table.item(row, 1).text().replace("₺", ""))
-                    count = int(self.product_table.item(row, 2).text())
-                    total_item_price = price * count
-                    total_amount += total_item_price
-                    
-                    shared_with_combo = self.product_table.cellWidget(row, 4)
-                    shared_with = shared_with_combo.currentText()
-                    
-                    # Process sharing information
-                    if shared_with == "Ortak":
-                        shared_with = [self.payer_dropdown.itemText(i) for i in range(1, self.payer_dropdown.count())]
-                    else:
-                        shared_with = [shared_with]
-                        
-                    sub_items.append({
-                        "name": name, 
-                        "item_price": price, 
-                        "count": count, 
-                        "price": total_item_price, 
-                        "shared_by": shared_with
-                    })
-                except (ValueError, AttributeError) as e:
-                    QMessageBox.warning(self, "Hata", f"Satır {row+1} işlenirken hata: {e}")
-                    return
-                    
-            # Create new expense object
-            new_expense = {
-                "location": location,
-                "date": current_date,
-                "time": current_time,
-                "total_amount": total_amount,
-                "paid_by": paid_by,
-                "sub_items": sub_items
-            }
-            
-        # Process Manual split view
+                name = self.product_table.item(row, 0).text()
+                price = float(self.product_table.item(row, 1).text().replace("₺", ""))
+                count = int(self.product_table.item(row, 2).text())
+                total_item_price = price * count
+                shared_with_combo = self.product_table.cellWidget(row, 4)  # ComboBox'ı al
+                shared_with = shared_with_combo.currentText()  # Seçili kişi veya "Ortak"
+
+                if shared_with == "Ortak":
+                    shared_with = [self.payer_dropdown.itemText(i) for i in range(1,self.payer_dropdown.count())]
+                    print(shared_with)
+                else:
+                    shared_with = [shared_with]
+
+                sub_items.append({"name": name, "item_price": price, "count":count, 'price':total_item_price, "shared_by": shared_with})
+
+            with open(EXPENSES_FILE, "r+", encoding="utf-8") as file:
+                data = json.load(file)
+                data["expenses"].append({
+                    "id": len(data["expenses"]) + 1,
+                    "location": location,
+                    "date": date.today().isoformat(),
+                    'time': datetime.now().strftime("%H:%M"),
+                    'total_amount': sum([item['price'] for item in sub_items]),
+                    "paid_by": paid_by,
+                    "sub_items": sub_items
+                })
+                file.seek(0)
+                json.dump(data, file, indent=4, ensure_ascii=False)
+
         elif self.stacked_widget.currentIndex() == 1:
             if self.manual_split_table.rowCount() == 0:
                 QMessageBox.warning(self, "Hata", "Lütfen en az bir kişi ekleyin!")
                 return
-                
-            # Get and validate total amount
+
             total_amount_text = self.manual_total_input.text().replace("₺", "").strip()
             try:
                 total_amount = float(total_amount_text)
-                if total_amount <= 0:
-                    QMessageBox.warning(self, "Hata", "Toplam tutar sıfırdan büyük olmalıdır!")
-                    return
             except ValueError:
                 QMessageBox.warning(self, "Hata", "Geçerli bir toplam tutar girin!")
                 return
-                
-            # Process manual splits
-            manual_split = {}
+
             sum_of_splits = 0.0
-            
+            manual_split = {}
+
             for row in range(self.manual_split_table.rowCount()):
+                name = self.manual_split_table.item(row, 0).text()
+                amount_text = self.manual_split_table.item(row, 1).text().strip()
+
                 try:
-                    name = self.manual_split_table.item(row, 0).text()
-                    amount_text = self.manual_split_table.item(row, 1).text().strip()
                     amount = float(amount_text)
-                    sum_of_splits += amount
-                    manual_split[name] = amount
-                except (ValueError, AttributeError) as e:
-                    QMessageBox.warning(self, "Hata", f"Satır {row+1} işlenirken hata: {e}")
+                except ValueError:
+                    QMessageBox.warning(self, "Hata", f"{name} için geçerli bir tutar girin!")
                     return
-                    
-            # Validate sum of splits matches total
-            if abs(sum_of_splits - total_amount) > 0.01:
+
+                sum_of_splits += amount
+                manual_split[name] = amount
+
+            if abs(sum_of_splits - total_amount) > 0.011:  # Allowing slight floating-point differences
                 QMessageBox.warning(self, "Hata", "Girilen tutarlar toplamı, toplam tutar ile eşleşmiyor!")
                 return
-                
-            # Create new expense object
-            new_expense = {
-                "location": location,
-                "date": current_date,
-                "time": current_time,
-                "total_amount": total_amount,
-                "paid_by": paid_by,
-                "manual_split": manual_split
-            }
-        else:
-            QMessageBox.warning(self, "Hata", "Geçersiz görünüm!")
-            return
-            
-        # Read current expenses
-        expenses_data = self.read_json_file(EXPENSES_FILE, "expenses")
-        
-        # Add ID to new expense
-        new_expense["id"] = len(expenses_data.get("expenses", [])) + 1
-        
-        # Add new expense to data
-        expenses_data.setdefault("expenses", []).append(new_expense)
-        
-        # Write updated data back to file
-        if self.write_json_file(EXPENSES_FILE, expenses_data, "expenses"):
-            QMessageBox.information(self, "Başarılı", "Harcama başarıyla kaydedildi!")
-            self.reset_expense_page()
-        else:
-            QMessageBox.warning(self, "Hata", "Harcama kaydedilirken bir sorun oluştu!")
 
+            # ✅ Save Manual Split Data
+            with open(EXPENSES_FILE, "r+", encoding="utf-8") as file:
+                data = json.load(file)
+                data["expenses"].append({
+                    "id": len(data["expenses"]) + 1,
+                    "location": location,
+                    "date": date.today().isoformat(),
+                    'time': datetime.now().strftime("%H:%M"),
+                    'total_amount': total_amount,
+                    "paid_by": paid_by,
+                    "manual_split": manual_split
+                })
+                file.seek(0)
+                json.dump(data, file, indent=4, ensure_ascii=False)
+
+
+        QMessageBox.information(self, "Başarılı", "Harcama başarıyla kaydedildi!")
+        self.reset_expense_page()
+        
     def return_to_summary(self):
         """Geri butonuna basıldığında Genel Özet Sayfasına yönlendirir ve verileri günceller."""
         main_window = self.parent().parent()
@@ -986,7 +1013,7 @@ class ExpenseEntryPage(QWidget):
                 pass  # Geçersiz veri girildiğinde hata vermemesi için
 
     def delete_selected_product(self):
-        """Improved method to delete selected product"""
+        """Tablodan seçilen ürünü siler ve toplam fiyatı günceller"""
         selected_row = self.product_table.currentRow()
         if selected_row == -1:
             QMessageBox.warning(self, "Hata", "Lütfen silmek için bir ürün seçin!")
@@ -1002,24 +1029,18 @@ class ExpenseEntryPage(QWidget):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            try:
-                # Get product total price before removing the row
-                product_total = float(self.product_table.item(selected_row, 3).text())
-                
-                # Update total price
-                total_price = float(self.product_total_input.text() or "0")
-                new_total = max(0, total_price - product_total)  # Ensure total doesn't go negative
-                self.product_total_input.setText(f"{new_total:.2f}")
+            # Toplam fiyatı güncelle
+            total_price = float(self.product_total_input.text())
+            product_total = float(self.product_table.item(selected_row, 3).text())
+            new_total = total_price - product_total
+            self.product_total_input.setText(f"{new_total:.2f}")
 
-                # Remove the row
-                self.product_table.removeRow(selected_row)
-                
-                # Enable/disable save button based on table content
-                self.save_button.setEnabled(self.product_table.rowCount() > 0)
-                
-            except (ValueError, AttributeError) as e:
-                QMessageBox.warning(self, "Hata", f"Ürün silinirken hata oluştu: {e}")
+            # Satırı sil
+            self.product_table.removeRow(selected_row)
 
+            # Kaydet butonunu kontrol et
+            self.save_button.setEnabled(self.product_table.rowCount() != 0)
+    
     def extract_expense_from_receipt(self, image_path):
         """
         Uses Google Gemini Flash 2.0 to extract structured expense data from an image.
