@@ -191,6 +191,8 @@ class ExpenseEntryPage(QWidget):
         
         # Tablo hücre değişikliklerini dinle
         self.product_table.cellChanged.connect(self.prevent_negative_values)
+        self.product_table.cellChanged.connect(self.on_product_table_cell_changed)
+
         self.manual_split_table.cellChanged.connect(self.prevent_negative_values)
 
         # Add Both Views to StackedWidget
@@ -214,6 +216,36 @@ class ExpenseEntryPage(QWidget):
 
         # Set Default View
         self.on_entry_type_changed(self.subitems_radio)
+
+    def on_product_table_cell_changed(self, row, column):
+        """Handles changes in the product table and updates the total price."""
+        if column in [1, 2]:  # Only react to changes in price or quantity columns
+            try:
+                # Get the updated price and quantity
+                price_item = self.product_table.item(row, 1)
+                count_item = self.product_table.item(row, 2)
+
+                price = float(price_item.text()) if price_item else 0.0
+                count = int(count_item.text()) if count_item else 0
+
+                # Update the total price for the row
+                total_price = price * count
+                self.product_table.setItem(row, 3, QTableWidgetItem(f"{total_price:.2f}"))
+
+                # Recalculate the overall total price
+                total = 0.0
+                for r in range(self.product_table.rowCount()):
+                    total_item = self.product_table.item(r, 3)
+                    total += float(total_item.text()) if total_item else 0.0
+
+                self.product_total_input.setText(f"{total:.2f}")
+
+            except ValueError:
+                QMessageBox.warning(self, "Hata", "Geçerli bir fiyat veya adet girin!")
+        
+        if self.product_table.rowCount() != 0:
+            self.save_button.setEnabled(True)
+
 
     def disable_widgets(self, layout):
         for i in range(layout.count()):
@@ -1051,9 +1083,55 @@ class ExpenseEntryPage(QWidget):
         # Resize image to prevent API errors due to large file sizes
         image = self.resize_image(image_path)
 
+        # Save the image to a receipts folder with store name and date-time
+        store_name = self.store_dropdown.currentText()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        receipts_folder = os.path.join(os.getcwd(), "receipts", store_name)
+
+        # Create the folder if it doesn't exist
+        os.makedirs(receipts_folder, exist_ok=True)
+
+        # Generate a unique file name
+        file_name = f"receipt_{self.payer_dropdown.currentText()}_{timestamp}.png"
+        file_path = os.path.join(receipts_folder, file_name)
+
+        # Save the image
+        try:
+            image.save(file_path)
+            print(f"✅ Receipt image saved at: {file_path}")
+        except Exception as e:
+            print(f"❌ Error saving receipt image: {e}")
+
+        # Display the image in a pop-up window using QDialog
+        image_popup = QDialog(self)
+        image_popup.setWindowTitle("Fiş Görseli")
+        image_popup_layout = QVBoxLayout(image_popup)
+
+        # Add QLabel to display the image
+        image_label = QLabel()
+        pixmap = image.toqpixmap()
+        image_label.setPixmap(pixmap)
+        image_label.setScaledContents(True)
+
+        # Maintain aspect ratio
+        original_width, original_height = image.size
+        aspect_ratio = original_width / original_height
+        popup_height = 300
+        popup_width = int(popup_height * aspect_ratio)
+        image_label.resize(popup_width, popup_height)
+
+        image_popup_layout.addWidget(image_label)
+        image_popup.setLayout(image_popup_layout)
+        image_popup.show()
+
+
         # 🔍 Improved prompt with example JSON
         prompt = """
-        Extract all structured data from this receipt and return it in strict JSON format.
+        Extract all structured data from this receipt and return it in strict JSON format. No special characters or formatting please like \\n or \\t.
+        On some cases, the data may not be complete, in that case, if it is a product assume that quantity is 1 and return null for those parts. 
+        Also on some stores structure of the reciept could be weird like a singe item could span multiple lines, the quantity might appear oprtional or apears when we have more than 1 item
+        In some stores names of the products might be abreviated or not clear, in that case can you make them more readible if the product name is obvious otherthan that leave it.
+        Return the tax as an item with quantity one if the sub total is different than the total or the amount of paid money is different than the total.
         The JSON should follow this structure:
 
         ```json
@@ -1105,6 +1183,8 @@ class ExpenseEntryPage(QWidget):
 
             # ✅ Convert JSON text to Python object
             extracted_data = json.loads(clean_json_text)
+            print("✅ Successfully extracted structured data from receipt!")
+            print("🔍 Extracted Data:", extracted_data)
 
             return extracted_data
 
@@ -1115,7 +1195,7 @@ class ExpenseEntryPage(QWidget):
 
         except Exception as e:
             print(f"❌ Unexpected Error: {e}")
-            return {"error": str(e)}
+            return {"error": str(e)}    
 
     def upload_receipt(self):
         """
